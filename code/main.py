@@ -95,12 +95,18 @@ if __name__=='__main__':
 
     trainer = Trainer(model, optimizer, scheduler, args)
 
-    test_acc_ls1 = []
-    test_acc_ls5 = []
+    test_i_top1_ls = []
+    test_i_top5_ls = []
+    test_t_top1_ls = []
+    test_t_top5_ls = []
+
     results = {'train_loss': [],
-               'test_acc@1': test_acc_ls1,
-               'test_acc@5': test_acc_ls5,
+               'test_R@1_Image': test_i_top1_ls,
+               'test_R@5_Image': test_i_top5_ls,
+               'test_R@1_Text': test_t_top1_ls,
+               'test_R@5_Text': test_t_top5_ls
               }
+    
     save_name_pre = '{}_{}_{}_{}_{}'.format(
         args.model, args.wd,
         args.batch_size, args.lr,  args.epochs)
@@ -109,25 +115,30 @@ if __name__=='__main__':
     final_model_dir = os.path.join(writer.log_dir, '{}_final_model.pth'.format(save_name_pre))
     fig_dir = os.path.join(writer.log_dir, '{}_loss_acc.png'.format(save_name_pre))
     
-    best_acc = 0.0
     for epoch in range(1, args.epochs+1):
         loss = trainer.train(train_loader, ranking_loader, epoch)
         
         results['train_loss'].append(loss.cpu().detach())
+        print(results['train_loss'])
         writer.add_scalar('loss/train', results['train_loss'][-1], epoch)
         
-        top1, top5 = trainer.validate(args, epoch)
-        test_acc_ls1.append(top1.cpu())
-        test_acc_ls5.append(top5.cpu())
-        writer.add_scalar('acc@1/test', results['test_acc@1'][-1], epoch)
-        writer.add_scalar('acc@5/test', results['test_acc@5'][-1], epoch)
+        image_recall, text_recall = trainer.validate(val_loader, epoch)
+        test_i_top1_ls.append(image_recall[0].cpu())
+        test_i_top5_ls.append(image_recall[1].cpu())
+        test_t_top1_ls.append(text_recall[0].cpu())
+        test_t_top5_ls.append(text_recall[1].cpu())
+
+        writer.add_scalar('IR@1', results['test_R@1_Image'][-1], epoch)
+        writer.add_scalar('IR@5', results['test_R@5_Image'][-1], epoch)
+        writer.add_scalar('TR@1', results['test_R@1_Text'][-1], epoch)
+        writer.add_scalar('TR@5', results['test_R@5_Text'][-1], epoch)
         
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
         data_frame.to_csv(csv_dir, index_label='epoch')
         
-        if top1 > best_acc:
-            best_acc = top1
+        if image_recall[0] > best_acc:
+            best_acc = image_recall[0]
             if isinstance(model, nn.DataParallel):
                 state_dict = model.module.state_dict()
             else:
@@ -144,11 +155,11 @@ if __name__=='__main__':
     df = pd.read_csv(csv_dir)
     fig, axes = plt.subplots(2, 2, sharex=True, figsize=(20,10))
     axes[0, 0].set_title('Loss/Train')
-    axes[0, 1].set_title('acc@1/test')
-    axes[1, 1].set_title('acc@5/test')
+    axes[0, 1].set_title('IR@1/test')
+    axes[1, 1].set_title('TR@1/test')
     sns.lineplot(ax=axes[0, 0], x="epoch", y="train_loss", data=df)
-    sns.lineplot(ax=axes[0, 1], x="epoch", y="test_acc@1", data=df)
-    sns.lineplot(ax=axes[1, 1], x="epoch", y="test_acc@5", data=df)        
+    sns.lineplot(ax=axes[0, 1], x="epoch", y="test_R@1_Image", data=df)
+    sns.lineplot(ax=axes[1, 1], x="epoch", y="test_R@1_Text", data=df)        
     fig.savefig(fig_dir)
 
 
