@@ -51,8 +51,8 @@ def get_contrastive_dataloader(args, preprocess_fn):
     val_set = torchvision.datasets.CocoCaptions(root=val_path, annFile=val_ann_path,
                                                   transform=preprocess_fn)
     
-    #pretrain_set = torch.utils.data.ConcatDataset((train_set, val_set))
-    #print(len(pretrain_set))
+    train_set, val_set = crreate_coco_subsets(train_set, val_set)
+    print(len(train_set))
 
     train_loader = DataLoader(train_set,
                               batch_size=args.batch_size,
@@ -129,9 +129,15 @@ class RankingLoader:
         data_path = args.data_train
         train_path = os.path.join(data_path, 'train2014/train2014/')
         train_ann_path = os.path.join(data_path, 'annotations_trainval2014/annotations/captions_train2014.json')
+        val_path = os.path.join(data_path, 'val2014/val2014/')
+        val_ann_path = os.path.join(data_path, 'annotations_trainval2014/annotations/captions_val2014.json')
 
         train_set = torchvision.datasets.CocoCaptions(root=train_path, annFile=train_ann_path,
                                                   transform=N_Transform(transform_list, base_transform))
+        val_set = torchvision.datasets.CocoCaptions(root=val_path, annFile=val_ann_path,
+                                                  transform=N_Transform(transform_list, base_transform))
+        
+        train_set, _ = create_coco_subsets(train_set, val_set)
 
         ranking_train_loader = DataLoader(train_set, batch_size=args.ranking_batch, 
                                     num_workers=args.workers, collate_fn=CapsCollate(args, batch_first=True), shuffle=True, pin_memory=False)
@@ -170,4 +176,19 @@ class N_Transform:
         for transform in self.transform_list:
             view = transform(x)
             view_list.append(view)
-        return torch.cat(view_list)      
+        return torch.cat(view_list)
+   
+def create_coco_subsets(train_set, val_set):
+    idx = np.arange(len(val_set))
+    idx_pos = np.random.choice(idx, 30000)
+    neg_idx = np.setdiff1d(idx, idx_pos, assume_unique=True)
+
+    test_idx = np.random.choice(neg_idx, 5000)
+    rest_idx = np.setdiff1d(neg_idx, test_idx, assume_unique=True)
+    val_idx = np.random.choice(rest_idx, 5000)
+
+    train_subset = Subset(val_set, idx_pos)
+    val_subset = Subset(val_set, val_idx)
+
+    total_train_set = ConcatDataset([train_set, train_subset])
+    return total_train_set, val_subset
