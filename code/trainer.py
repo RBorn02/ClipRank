@@ -136,12 +136,12 @@ def validate(self, val_loader, epoch):
         val_bar = tqdm(val_loader)
 
         start = time.time()
+        image_encs, text_encs = [], []
         for image, text in val_bar:
             dtime = time.time() - start
 
             image, text = image.to(self.device), text.to(self.device)
 
-            image_encs, text_encs = [], []
             with torch.no_grad():
                 image_features = self.model.encode_image(image)
                 text_features = self.model.encode_text(text)
