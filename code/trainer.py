@@ -56,8 +56,8 @@ class Trainer:
                 contrastive_loss.append(con_loss)
 
                 image, text = ranking_tuple[0].to(self.device), ranking_tuple[1].to(self.device)
-                image_features = self.model.encode_image(image.reshape(-1, 3, n_px, n_px))
-                text_features = self.model.encode_text(text)
+                image_features = self.model.module.encode_image(image.reshape(-1, 3, n_px, n_px))
+                text_features = self.model.module.encode_text(text)
                 rank_loss = self.rank_loss(image_features.reshape(self.num_trans+1, self.ranking_batch, -1), text_features)
                 ranking_loss.append(rank_loss)
 
@@ -143,8 +143,8 @@ def validate(self, val_loader, epoch):
             image, text = image.to(self.device), text.to(self.device)
 
             with torch.no_grad():
-                image_features = self.model.encode_image(image)
-                text_features = self.model.encode_text(text)
+                image_features = self.model.module.encode_image(image)
+                text_features = self.model.module.encode_text(text)
 
             image_encs.append(image_features)
             text_encs.append(text_features)
