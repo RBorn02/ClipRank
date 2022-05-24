@@ -129,58 +129,81 @@ class Trainer:
 
             return sum(contrastive_loss) / len(contrastive_loss)
 
-    def validate(self, val_loader, epoch):
+  
+def validate(self, val_loader, epoch):
         self.model.eval()
 
         val_bar = tqdm(val_loader)
-
-        R1, R5, tot_num = [], [], 0.0
 
         start = time.time()
         for image, text in val_bar:
             dtime = time.time() - start
 
             image, text = image.to(self.device), text.to(self.device)
-            with torch.no_grad():
-                image_logits, text_logits = self.model(image, text)
 
-            recall_list = compute_recall(image_logits, [1, 5])
+            image_encs, text_encs = [], []
+            with torch.no_grad():
+                image_features = self.model.encode_image(image)
+                text_features = self.model.encode_text(text)
+
+            image_encs.append(image_features)
+            text_encs.append(text_features)
+            
+        image_features = torch.cat(image_encs)
+        text_features = torch.cat(text_encs)
             
 
-            R1.append(recall_list[0])
-            R5.append(recall_list[1])
+        image_recall_list, text_recall_list = compute_recall(image_features, text_features, [1, 5])
 
-            ctime = time.time() - start - dtime
-            start = time.time()
-            val_bar.set_description(
-                '{}Eval{} {}Epoch:{}[{}/{}] {}Recall@1:{}{:.4f} {}Recall@5:{}{:.4f} ctime:{:.6f} dtime:{:.6f}]'
+        ctime = time.time() - start - dtime
+        start = time.time()
+        val_bar.set_description(
+                '{}Eval{} {}Epoch:{}[{}/{}] {}I R@1:{}{:.4f} {}I R@5:{}{:.4f} {}T R@1:{}{:.4f} {}T R@5:{}{:.4f} ctime:{:.6f} dtime:{:.6f}]'
                 .format(
                     bcolors.OKCYAN, bcolors.ENDC,
                     bcolors.WARNING, bcolors.ENDC,
                     epoch,
                     self.epochs,
                     bcolors.WARNING, bcolors.ENDC,
-                    sum(R1) / len(R1),
+                    image_recall_list[0],
                     bcolors.WARNING, bcolors.ENDC,
-                    sum(R5) / len(R5),
+                    image_recall_list[1],
+                    bcolors.WARNING, bcolors.ENDC,
+                    text_recall_list[0],
+                    bcolors.WARNING, bcolors.ENDC,
+                    text_recall_list[1],
                     ctime,
                     dtime,
-                    bcolors.WARNING, bcolors.ENDC))   
-        return (sum(R1) / len(R1)), (sum(R5) / len(R5))
+                    bcolors.WARNING, bcolors.ENDC))
+
+        return image_recall_list, text_recall_list
 
 
-def compute_recall(image_logits, k):
+def compute_recall(image_encs, text_encs, k):
     labels = torch.arange(image_logits.shape[0]).to(image_logits.device)
 
-    _, pred_labels = torch.topk(image_logits, k[-1], dim=1)
+    image_encs = image_encs / image_encs.norm(dim=1, keepdim=True)
+    text_encs = text_encs / text_encs.norm(dim=1, keepdim=True)
 
-    recall_list = []
+    sim_matrix = image_encs @ text_encs.t()
+
+    _, image_pred_labels = torch.topk(sim_matrix, k[-1], dim=1)
+
+    image_recall_list = []
     for i in k:
-        correct_bool = labels.reshape(-1, 1).repeat(1, pred_labels.shape[1]) == pred_labels[:,:i]
+        correct_bool = labels.reshape(-1, 1).repeat(1, image_pred_labels.shape[1]) == image_pred_labels[:,:i]
         correct_vec = torch.any(correct_bool, dim=1)
         recall = torch.mean(correct_vec.float())
-        recall_list.append(recall)
-    return recall_list
+        image_recall_list.append(recall)
+    
+    _, text_pred_labels = torch.topl(sim_matrix.t(), k[-1], dim=1)
+    for i in k:
+        correct_bool = labels.reshape(-1, 1).repeat(1, text_pred_labels.shape[1]) == text_pred_labels[:,:i]
+        correct_vec = torch.any(correct_bool, dim=1)
+        recall = torch.mean(correct_vec.float())
+        text_recall_list.append(recall)
+    
+    return image_recall_list, text_recall_list
 
 def convert_models_to_fp32(model): 
         for p in model.parameters(): 
