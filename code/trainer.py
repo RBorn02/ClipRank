@@ -196,7 +196,9 @@ def compute_recall(image_encs, text_encs, k):
         recall = torch.mean(correct_vec.float())
         image_recall_list.append(recall)
     
-    _, text_pred_labels = torch.topl(sim_matrix.t(), k[-1], dim=1)
+    _, text_pred_labels = torch.topk(sim_matrix.t(), k[-1], dim=1)
+    
+    text_recall_list = []
     for i in k:
         correct_bool = labels.reshape(-1, 1).repeat(1, text_pred_labels.shape[1]) == text_pred_labels[:,:i]
         correct_vec = torch.any(correct_bool, dim=1)
