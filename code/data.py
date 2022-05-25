@@ -51,7 +51,7 @@ def get_contrastive_dataloader(args, preprocess_fn):
     val_set = torchvision.datasets.CocoCaptions(root=val_path, annFile=val_ann_path,
                                                   transform=preprocess_fn)
     
-    train_set, val_set = crreate_coco_subsets(train_set, val_set)
+    train_set, val_set = create_coco_subsets(train_set, val_set)
     print(len(train_set))
 
     train_loader = DataLoader(train_set,
